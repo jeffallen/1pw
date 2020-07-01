@@ -8,12 +8,14 @@ import (
 	"os"
 	"strings"
 
+	"github.com/jeffallen/opvault"
 	"golang.org/x/crypto/ssh/terminal"
-
-	"github.com/miquella/opvault"
 )
 
 var fn = flag.String("file", os.ExpandEnv("$HOME/Dropbox/1Password/1Password.opvault"), "Filename of the vault")
+var prof = flag.String("profile", "default", "Profile")
+var profs = flag.Bool("profiles", false, "Dump all profiles.")
+var hideTrashed = flag.Bool("hideTrashed", true, "Hide trashed items.")
 
 func main() {
 	flag.Parse()
@@ -23,7 +25,18 @@ func main() {
 		log.Fatal("Directory ", *fn, ":", err)
 	}
 
-	p, err := vault.Profile("default")
+	if *profs {
+		pn, err := vault.ProfileNames()
+		if err != nil {
+			log.Fatal("Could not get profile names:", err)
+		}
+		for _, x := range pn {
+			fmt.Println(x)
+		}
+		return
+	}
+
+	p, err := vault.Profile(*prof)
 	if err != nil {
 		log.Fatal("profile lookup", err)
 	}
@@ -66,17 +79,32 @@ func main() {
 		items, err := p.Items()
 		for _, item := range items {
 			if lookup == "*" || strings.Contains(strings.ToLower(item.Title()), lookup) {
-				fmt.Fprintf(term, "\nTitle: %v\n", item.Title())
+				if item.Trashed() && *hideTrashed {
+					continue
+				}
+
+				if item.Trashed() {
+					fmt.Fprintf(term, "Title: %v (trashed)\n", item.Title())
+				} else {
+					fmt.Fprintf(term, "Title: %v\n", item.Title())
+				}
+
+				fmt.Fprintf(term, "Category: %v\n", item.Category())
 
 				d, err := item.Detail()
 				if err != nil {
-					term.Write([]byte(fmt.Sprintf("error: %v\n", err)))
+					fmt.Fprintf(term, "error: %v", err)
+				}
+
+				if d.Password() != "" {
+					fmt.Fprintf(term, "password -> %v\n", d.Password())
 				}
 
 				for _, f := range d.Fields() {
-					term.Write([]byte(fmt.Sprintf("%v -> %v\n", f.Name(), f.Value())))
+					fmt.Fprintf(term, "%v -> %v\n", f.Name(), f.Value())
 				}
 			}
 		}
+		fmt.Fprintln(term)
 	}
 }
