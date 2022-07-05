@@ -6,13 +6,17 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/user"
+	"path/filepath"
 	"strings"
+	"syscall"
 
+	"github.com/chzyer/readline"
 	"github.com/jeffallen/opvault"
-	"golang.org/x/crypto/ssh/terminal"
 )
 
-var fn = flag.String("file", os.ExpandEnv("$HOME/Dropbox/1Password/1Password.opvault"), "Filename of the vault")
+var home = func() string { u, _ := user.Current(); return u.HomeDir }()
+var fn = flag.String("file", filepath.Join(home, "Dropbox", "1Password", "1Password.opvault"), "Filename of the vault.")
 var prof = flag.String("profile", "default", "Profile")
 var profs = flag.Bool("profiles", false, "Dump all profiles.")
 var hideTrashed = flag.Bool("hideTrashed", true, "Hide trashed items.")
@@ -41,22 +45,18 @@ func main() {
 		log.Fatal("profile lookup", err)
 	}
 
-	state, _ := terminal.MakeRaw(int(os.Stdin.Fd()))
-	defer func() {
-		terminal.Restore(int(os.Stdin.Fd()), state)
-		os.Stdin.Write([]byte("\n"))
-	}()
-
-	term := terminal.NewTerminal(os.Stdin, "lookup? ")
+	rl, err := readline.New("lookup? ")
 
 	var pw string
 	pw = os.Getenv("PASS")
 	if pw == "" {
-		pw, err = term.ReadPassword("password? ")
+		fmt.Fprint(rl, "password? ")
+		bpw, err := readline.ReadPassword(int(syscall.Stdin))
 		if err != nil {
 			log.Print("password read: ", err)
 			return
 		}
+		pw = string(bpw)
 	}
 
 	err = p.Unlock(pw)
@@ -64,47 +64,47 @@ func main() {
 		log.Print("unlock: ", err)
 		return
 	}
-
 	for {
-		lookup, err := term.ReadLine()
+		lookup, err := rl.Readline()
 		if err != nil {
 			if err != io.EOF {
-				term.Write([]byte(fmt.Sprintf("error: %v\n", err)))
+				fmt.Printf("error: %v\n", err)
 			}
 			return
 		}
 
 		lookup = strings.ToLower(lookup)
+		fmt.Printf("looking up %q\n", lookup)
 
-		items, err := p.Items()
+		items, _ := p.Items()
 		for _, item := range items {
+			//println("item:", item.Title())
 			if lookup == "*" || strings.Contains(strings.ToLower(item.Title()), lookup) {
 				if item.Trashed() && *hideTrashed {
 					continue
 				}
 
 				if item.Trashed() {
-					fmt.Fprintf(term, "Title: %v (trashed)\n", item.Title())
+					fmt.Printf("Title: %v (trashed)\n", item.Title())
 				} else {
-					fmt.Fprintf(term, "Title: %v\n", item.Title())
+					fmt.Printf("Title: %v\n", item.Title())
 				}
 
-				fmt.Fprintf(term, "Category: %v\n", item.Category())
+				fmt.Printf("Category: %v\n", item.Category())
 
 				d, err := item.Detail()
 				if err != nil {
-					fmt.Fprintf(term, "error: %v", err)
+					fmt.Printf("error: %v", err)
 				}
 
 				if d.Password() != "" {
-					fmt.Fprintf(term, "password -> %v\n", d.Password())
+					fmt.Printf("password -> %v\n", d.Password())
 				}
 
 				for _, f := range d.Fields() {
-					fmt.Fprintf(term, "%v -> %v\n", f.Name(), f.Value())
+					fmt.Printf("%v -> %v\n", f.Name(), f.Value())
 				}
 			}
 		}
-		fmt.Fprintln(term)
 	}
 }
