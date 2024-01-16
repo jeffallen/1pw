@@ -10,9 +10,12 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/chzyer/readline"
+	"github.com/creachadair/otp/otpauth"
 	"github.com/jeffallen/opvault"
+	"github.com/pcarrier/gauth/gauth"
 )
 
 var home = func() string { u, _ := user.Current(); return u.HomeDir }()
@@ -65,7 +68,13 @@ func main() {
 		return
 	}
 	for {
-		lookup, err := rl.Readline()
+		lookup := os.Getenv("lookup")
+		once := true
+		var err error
+		if lookup == "" {
+			lookup, err = rl.Readline()
+			once = false
+		}
 		if err != nil {
 			if err != io.EOF {
 				fmt.Printf("error: %v\n", err)
@@ -76,12 +85,25 @@ func main() {
 		lookup = strings.ToLower(lookup)
 		fmt.Printf("looking up %q\n", lookup)
 
+		cnt := 0
 		items, _ := p.Items()
 		for _, item := range items {
-			//println("item:", item.Title())
 			if lookup == "*" || strings.Contains(strings.ToLower(item.Title()), lookup) {
 				if item.Trashed() && *hideTrashed {
 					continue
+				}
+
+				detail, err := item.Detail()
+				if err != nil {
+					fmt.Printf("could not get detail: %v\n", err)
+				}
+				otp := ""
+				for _, section := range detail.Sections() {
+					for _, field := range section.Fields() {
+						if strings.HasPrefix(field.Value(), "otpauth://") {
+							otp = field.Value()
+						}
+					}
 				}
 
 				if item.Trashed() {
@@ -104,7 +126,30 @@ func main() {
 				for _, f := range d.Fields() {
 					fmt.Printf("%v -> %v\n", f.Name(), f.Value())
 				}
+
+				// only try to do OTP on the first one
+				if cnt == 0 {
+					url, err := otpauth.ParseURL(otp)
+					if err == nil {
+						_, cur, next, err := gauth.Codes(url)
+						if err == nil {
+							fmt.Println("OTP code 1: ", cur)
+							_, sleep := gauth.IndexNow()
+							time.Sleep(time.Duration(sleep))
+							fmt.Println("OTP code 2: ", next)
+						} else {
+							fmt.Printf("error: %v", err)
+						}
+					} else {
+						fmt.Printf("error: %v", err)
+					}
+				}
+
+				cnt++
 			}
+		}
+		if once {
+			return
 		}
 	}
 }
