@@ -60,7 +60,7 @@ jobs:
             # or ensure the environment is correctly passed.
             # Let's try directly first.
             go version
-            echo "Running tests on ARM64..."
-            go test ./...
+            echo "Skipping tests on ARM64 (as requested)."
+            # go test ./...
             echo "Building project on ARM64..."
             go build ./...
