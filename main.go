@@ -134,8 +134,7 @@ func main() {
 						_, cur, next, err := gauth.Codes(url)
 						if err == nil {
 							fmt.Println("OTP code 1: ", cur)
-							_, sleep := gauth.IndexNow()
-							time.Sleep(time.Duration(sleep))
+							time.Sleep(time.Duration(gauth.DefaultPeriod) * time.Second)
 							fmt.Println("OTP code 2: ", next)
 						} else {
 							fmt.Printf("error: %v", err)
