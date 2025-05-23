@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go-version: ['1.21'] # Specify a recent Go version
+        go-version: ['1.24'] # Specify a recent Go version
 
     steps:
       - name: Checkout code
