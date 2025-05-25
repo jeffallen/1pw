@@ -50,19 +50,25 @@ func main() {
 
 	rl, err := readline.New("lookup? ")
 
-	var pw string
-	pw = os.Getenv("PASS")
-	if pw == "" {
+	var pwBytes []byte
+	envPass := os.Getenv("PASS")
+	if envPass != "" {
+		pwBytes = []byte(envPass)
+	}
+	if pwBytes == nil {
 		fmt.Fprint(rl, "password? ")
 		bpw, err := readline.ReadPassword(int(syscall.Stdin))
 		if err != nil {
 			log.Print("password read: ", err)
 			return
 		}
-		pw = string(bpw)
+		pwBytes = bpw
 	}
 
-	err = p.Unlock(pw)
+	err = p.Unlock(string(pwBytes))
+	for i := range pwBytes {
+		pwBytes[i] = 0
+	}
 	if err != nil {
 		log.Print("unlock: ", err)
 		return
